@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>LBM Fluid Simulation with Divergence Map Editor</title>
+  <title>Thermal LBM Simulation with Ground Temperature Map Editor</title>
   <style>
     body {
       margin: 0;
@@ -53,7 +53,7 @@
     </label>
     <span id="dampLabel">0.020</span>
   </div>
-  <!-- The noise amplitude & scale sliders now control the generation of the base (Perlin) map -->
+  <!-- The noise amplitude & scale sliders now control the generation of the base (Perlin) ground temperature map -->
   <div>
     <label>
       Noise Amplitude:
@@ -75,8 +75,32 @@
     </label>
     <span id="tailLengthLabel">10.0</span>
   </div>
+  <!-- New: Particle Spawn Rate slider -->
   <div>
-    <button id="toggleDivergence">Show Divergence</button>
+    <label>
+      Spawn Rate (particles/sec):
+      <input type="range" id="spawnRate" min="0" max="200" step="1" value="50">
+    </label>
+    <span id="spawnRateLabel">50</span>
+  </div>
+  <!-- New: Ground–Air Conduction slider -->
+  <div>
+    <label>
+      Ground–Air Conduction:
+      <input type="range" id="groundConduction" min="0" max="1" step="0.01" value="0.1">
+    </label>
+    <span id="groundConductionLabel">0.10</span>
+  </div>
+  <!-- New: Thermal Diffusivity slider -->
+  <div>
+    <label>
+      Thermal Diffusivity:
+      <input type="range" id="thermalDiffusivity" min="0.001" max="0.1" step="0.001" value="0.01">
+    </label>
+    <span id="thermalDiffusivityLabel">0.010</span>
+  </div>
+  <div>
+    <button id="toggleDivergence">Show Ground Temp Map</button>
   </div>
   <!-- Map Editor Toggle -->
   <div>
@@ -98,14 +122,25 @@
       </label>
       <span id="brushValueLabel">0.010</span>
     </div>
+    <!-- New: Brush Weight slider -->
+    <div>
+      <label>
+         Brush Weight:
+         <input type="range" id="brushWeight" min="0" max="1" step="0.01" value="1">
+      </label>
+      <span id="brushWeightLabel">1.00</span>
+    </div>
     <div>
       <button id="clearPerlin">Clear Perlin</button>
       <button id="clearEdit">Clear</button>
       <button id="saveMap">Save Map</button>
+      <button id="loadMap">Load Map</button>
+      <!-- Hidden file input for loading -->
+      <input type="file" id="loadMapInput" accept="image/png" style="display:none;">
     </div>
     <div style="font-size:0.8em; margin-top:5px;">
-      Paint divergence using the brush (linear falloff). The brush “pushes” the value toward the brush target.
-      (Default divergence map is generated from Perlin noise.)
+      Paint the ground temperature using the brush (linear falloff). The brush “pushes” the value toward the brush target.
+      (Default ground temperature map is generated from Perlin noise.)
     </div>
   </div>
   <div style="font-size:0.8em;">
@@ -196,18 +231,26 @@
   const weights = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
   const cs2 = 1/3;  // lattice speed-of-sound squared
 
-  // Global LBM arrays (each cell holds 9 values)
+  // Global LBM arrays (each cell holds 9 values) for fluid:
   let f = new Float32Array(NX * NY * 9);
   let fTemp = new Float32Array(NX * NY * 9);
+  // Global LBM arrays for air temperature:
+  let g = new Float32Array(NX * NY * 9);
+  let gTemp = new Float32Array(NX * NY * 9);
 
   // Global simulation parameters:
   let viscosity = parseFloat(document.getElementById('viscosity').value);
   let tau = viscosity * 3 + 0.5;
   let damping = parseFloat(document.getElementById('damping').value);
-  let noiseAmplitude = parseFloat(document.getElementById('noiseAmplitude').value); // now default 0.01
+  let noiseAmplitude = parseFloat(document.getElementById('noiseAmplitude').value);
   let noiseScale = parseFloat(document.getElementById('noiseScale').value);
   let tailLength = parseFloat(document.getElementById('tailLength').value);
-  let showDivergence = false; // toggles display mode
+  let showDivergence = false; // now shows ground temperature map
+
+  // New thermal parameters:
+  let groundConduction = parseFloat(document.getElementById('groundConduction').value);
+  let thermalDiffusivity = parseFloat(document.getElementById('thermalDiffusivity').value);
+  let tauT = thermalDiffusivity * 3 + 0.5;  // relaxation time for temperature field
 
   // Editor mode flags:
   let editorMode = false;  // when true, simulation pauses and editor controls are active.
@@ -215,7 +258,7 @@
   let editorMousePos = { x: 0, y: 0 };
 
   // Two maps:
-  // baseMap: the underlying Perlin-noise–generated divergence (generated with amplitude 0.01 by default)
+  // baseMap: the underlying Perlin-noise–generated ground temperature (generated with amplitude 0.01 by default)
   // editMap: user modifications (initially all 0)
   let baseMap = new Float32Array(NX * NY);
   let editMap = new Float32Array(NX * NY);
@@ -243,6 +286,8 @@
   const noiseScaleLabel = document.getElementById('noiseScaleLabel');
   const tailLengthSlider = document.getElementById('tailLength');
   const tailLengthLabel = document.getElementById('tailLengthLabel');
+  const spawnRateSlider = document.getElementById('spawnRate');
+  const spawnRateLabel = document.getElementById('spawnRateLabel');
   const toggleDivergenceBtn = document.getElementById('toggleDivergence');
   const toggleEditorBtn = document.getElementById('toggleEditor');
   const editorControls = document.getElementById('editorControls');
@@ -250,9 +295,13 @@
   const brushSizeLabel = document.getElementById('brushSizeLabel');
   const brushValueSlider = document.getElementById('brushValue');
   const brushValueLabel = document.getElementById('brushValueLabel');
+  const brushWeightSlider = document.getElementById('brushWeight');
+  const brushWeightLabel = document.getElementById('brushWeightLabel');
   const clearPerlinBtn = document.getElementById('clearPerlin');
   const clearEditBtn = document.getElementById('clearEdit');
   const saveMapBtn = document.getElementById('saveMap');
+  const loadMapBtn = document.getElementById('loadMap');
+  const loadMapInput = document.getElementById('loadMapInput');
 
   visSlider.addEventListener('input', (e) => {
     viscosity = parseFloat(e.target.value);
@@ -275,9 +324,22 @@
     tailLength = parseFloat(e.target.value);
     tailLengthLabel.textContent = tailLength.toFixed(1);
   });
+  spawnRateSlider.addEventListener('input', (e) => {
+    spawnRate = parseFloat(e.target.value);
+    spawnRateLabel.textContent = spawnRate;
+  });
+  document.getElementById('groundConduction').addEventListener('input', (e) => {
+    groundConduction = parseFloat(e.target.value);
+    document.getElementById('groundConductionLabel').textContent = groundConduction.toFixed(2);
+  });
+  document.getElementById('thermalDiffusivity').addEventListener('input', (e) => {
+    thermalDiffusivity = parseFloat(e.target.value);
+    document.getElementById('thermalDiffusivityLabel').textContent = thermalDiffusivity.toFixed(3);
+    tauT = thermalDiffusivity * 3 + 0.5;
+  });
   toggleDivergenceBtn.addEventListener('click', () => {
     showDivergence = !showDivergence;
-    toggleDivergenceBtn.textContent = showDivergence ? "Show Flow Lines" : "Show Divergence";
+    toggleDivergenceBtn.textContent = showDivergence ? "Show Flow Lines" : "Show Ground Temp Map";
   });
   // Map Editor toggle
   toggleEditorBtn.addEventListener('click', () => {
@@ -292,22 +354,89 @@
   brushValueSlider.addEventListener('input', (e) => {
     brushValueLabel.textContent = parseFloat(e.target.value).toFixed(3);
   });
+  brushWeightSlider.addEventListener('input', (e) => {
+    brushWeight = parseFloat(e.target.value);
+    brushWeightLabel.textContent = brushWeight.toFixed(2);
+  });
   // "Clear Perlin" resets baseMap with amplitude 0.01 using the current noise scale.
   clearPerlinBtn.addEventListener('click', () => {
     generateBaseMap(0.01, noiseScale);
   });
-  // "Clear" resets the entire divergence field (both baseMap and editMap) to 0.
+  // "Clear" resets the entire ground temperature field (both baseMap and editMap) to 0.
   clearEditBtn.addEventListener('click', () => {
     for (let i = 0; i < NX * NY; i++) {
       baseMap[i] = 0;
       editMap[i] = 0;
     }
   });
-  // Save Map: exit editor mode.
+  // Save Map: export the current ground temperature map (baseMap+editMap) as a PNG, then exit editor mode.
+  function saveMapToPNG() {
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = NX;
+    offCanvas.height = NY;
+    const offCtx = offCanvas.getContext('2d');
+    const imageData = offCtx.createImageData(NX, NY);
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const idx = x + y * NX;
+        let T_ground = baseMap[idx] + editMap[idx];
+        // Map the ground temperature range [-0.02, 0.02] to [0,255]
+        let col = Math.floor(((T_ground + 0.02) / 0.04) * 255);
+        col = Math.max(0, Math.min(255, col));
+        const pixelIndex = (x + y * NX) * 4;
+        imageData.data[pixelIndex] = col;
+        imageData.data[pixelIndex+1] = col;
+        imageData.data[pixelIndex+2] = col;
+        imageData.data[pixelIndex+3] = 255;
+      }
+    }
+    offCtx.putImageData(imageData, 0, 0);
+    const dataURL = offCanvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = 'ground_temperature_map.png';
+    link.href = dataURL;
+    link.click();
+  }
   saveMapBtn.addEventListener('click', () => {
+    saveMapToPNG();
     editorMode = false;
     editorControls.style.display = 'none';
     toggleEditorBtn.style.display = 'block';
+  });
+  // Load Map: trigger file selection.
+  loadMapBtn.addEventListener('click', () => {
+    loadMapInput.click();
+  });
+  // When a file is chosen, load it and update the map.
+  loadMapInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const img = new Image();
+      img.onload = function() {
+        // Draw the image onto an offscreen canvas of size NX x NY.
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = NX;
+        offCanvas.height = NY;
+        const offCtx = offCanvas.getContext('2d');
+        offCtx.drawImage(img, 0, 0, NX, NY);
+        const imageData = offCtx.getImageData(0, 0, NX, NY);
+        for (let y = 0; y < NY; y++) {
+          for (let x = 0; x < NX; x++) {
+            const pixelIndex = (x + y * NX) * 4;
+            const col = imageData.data[pixelIndex]; // assume grayscale image
+            // Map from [0,255] to ground temperature [-0.02, 0.02]
+            const T_ground = (col / 255) * 0.04 - 0.02;
+            const idx = x + y * NX;
+            baseMap[idx] = T_ground;
+            editMap[idx] = 0;
+          }
+        }
+      }
+      img.src = event.target.result;
+    }
+    reader.readAsDataURL(file);
   });
 
   // Canvas setup
@@ -317,39 +446,52 @@
   const ctx = canvas.getContext('2d');
 
   /***** Particle System *****/
-  const particles = [];
-  const numParticles = 500;
+  const particles = [];  // start with no particles
   const particleLifetime = 15;
   let simTime = 0;
-  for (let i = 0; i < numParticles; i++) {
+  let particleSpawnAccumulator = 0;
+  // spawnRate is controlled by the slider:
+  let spawnRate = parseFloat(spawnRateSlider.value);
+
+  function spawnParticle() {
     particles.push({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      age: Math.random() * particleLifetime,
+      age: 0,
       trail: []
     });
   }
 
-  /***** Initialize LBM Grid (ρ = 1, u = 0) *****/
+  /***** Initialize LBM Grid for Fluid (ρ = 1, u = 0) *****/
   for (let y = 0; y < NY; y++) {
     for (let x = 0; x < NX; x++) {
-      const base = (x + y * NX) * 9;
+      const baseIndex = (x + y * NX) * 9;
       for (let i = 0; i < 9; i++) {
-        f[base + i] = weights[i];
+        f[baseIndex + i] = weights[i];
+      }
+    }
+  }
+  /***** Initialize Temperature Field (air ambient temperature T0 = 0) *****/
+  for (let y = 0; y < NY; y++) {
+    for (let x = 0; x < NX; x++) {
+      const baseIndex = (x + y * NX) * 9;
+      let T0 = 0.0;
+      for (let i = 0; i < 9; i++) {
+        g[baseIndex + i] = weights[i] * T0;
       }
     }
   }
 
-  /***** LBM Step with Divergence Forcing *****
-   * The divergence forcing S in each cell is (baseMap + editMap).
+  /***** LBM Step for Fluid (without any extra forcing) *****
+   * Note: We removed the previous divergence forcing term.
    *****/
   function stepLBM(dtStep) {
     for (let y = 0; y < NY; y++) {
       for (let x = 0; x < NX; x++) {
-        const base = (x + y * NX) * 9;
+        const baseIndex = (x + y * NX) * 9;
         let rho = 0, momX = 0, momY = 0;
         for (let i = 0; i < 9; i++) {
-          const fi = f[base + i];
+          const fi = f[baseIndex + i];
           rho += fi;
           momX += fi * ex[i];
           momY += fi * ey[i];
@@ -357,23 +499,22 @@
         let ux = momX / rho;
         let uy = momY / rho;
         const uSq = ux * ux + uy * uy;
-        let S = baseMap[x + y * NX] + editMap[x + y * NX];
         for (let i = 0; i < 9; i++) {
           const e_dot_u = ex[i] * ux + ey[i] * uy;
           const feq = weights[i] * rho * (1 + 3 * e_dot_u + 4.5 * e_dot_u * e_dot_u - 1.5 * uSq);
-          f[base + i] = f[base + i] - (f[base + i] - feq) / tau + S * weights[i];
+          f[baseIndex + i] = f[baseIndex + i] - (f[baseIndex + i] - feq) / tau;
         }
       }
     }
     // Streaming step:
     for (let y = 0; y < NY; y++) {
       for (let x = 0; x < NX; x++) {
-        const base = (x + y * NX) * 9;
+        const baseIndex = (x + y * NX) * 9;
         for (let i = 0; i < 9; i++) {
           const x2 = (x + ex[i] + NX) % NX;
           const y2 = (y + ey[i] + NY) % NY;
-          const base2 = (x2 + y2 * NX) * 9;
-          fTemp[base2 + i] = f[base + i];
+          const baseIndex2 = (x2 + y2 * NX) * 9;
+          fTemp[baseIndex2 + i] = f[baseIndex + i];
         }
       }
     }
@@ -383,12 +524,66 @@
     // Damping:
     for (let y = 0; y < NY; y++) {
       for (let x = 0; x < NX; x++) {
-        const base = (x + y * NX) * 9;
+        const baseIndex = (x + y * NX) * 9;
         for (let i = 0; i < 9; i++) {
-          f[base + i] = weights[i] + (f[base + i] - weights[i]) * (1 - damping * dtStep);
+          f[baseIndex + i] = weights[i] + (f[baseIndex + i] - weights[i]) * (1 - damping * dtStep);
         }
       }
     }
+  }
+
+  /***** Temperature LBM Step (TLBM) *****
+   * This updates the air temperature field using its own distribution function g.
+   * It uses the local fluid velocity (computed from f) to advect temperature,
+   * and applies a forcing term that conducts the air toward the ground temperature (baseMap+editMap).
+   *****/
+  function stepTLBM(dtStep) {
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const baseIndex = (x + y * NX) * 9;
+        // Compute local air temperature T_air from g:
+        let T_air = 0;
+        for (let i = 0; i < 9; i++) {
+          T_air += g[baseIndex + i];
+        }
+        // Compute local fluid velocity (for advection) from f:
+        let rho = 0, momX = 0, momY = 0;
+        for (let i = 0; i < 9; i++) {
+          const fi = f[baseIndex + i];
+          rho += fi;
+          momX += fi * ex[i];
+          momY += fi * ey[i];
+        }
+        let ux = momX / rho;
+        let uy = momY / rho;
+        // For each direction, compute equilibrium and apply conduction forcing:
+        // The equilibrium for a passive scalar (with convection) is taken as:
+        //   g_eq = weight * T_air * (1 + 3*(e·u))
+        // The forcing F = groundConduction*(T_ground - T_air), where T_ground is from our ground map.
+        let T_ground = baseMap[x + y * NX] + editMap[x + y * NX];
+        let F = groundConduction * (T_ground - T_air);
+        for (let i = 0; i < 9; i++) {
+          let e_dot_u = ex[i] * ux + ey[i] * uy;
+          let geq = weights[i] * T_air * (1 + 3 * e_dot_u);
+          g[baseIndex + i] = g[baseIndex + i] - (g[baseIndex + i] - geq) / tauT + F * weights[i];
+        }
+      }
+    }
+    // Streaming step for g:
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const baseIndex = (x + y * NX) * 9;
+        for (let i = 0; i < 9; i++) {
+          const x2 = (x + ex[i] + NX) % NX;
+          const y2 = (y + ey[i] + NY) % NY;
+          const baseIndex2 = (x2 + y2 * NX) * 9;
+          gTemp[baseIndex2 + i] = g[baseIndex + i];
+        }
+      }
+    }
+    let temp = g;
+    g = gTemp;
+    gTemp = temp;
   }
 
   /***** Helper: Bilinearly Interpolated Velocity *****/
@@ -399,10 +594,10 @@
     i = Math.max(0, Math.min(i, NX - 2));
     j = Math.max(0, Math.min(j, NY - 2));
     function cellVelocity(i, j) {
-      const base = (i + j * NX) * 9;
+      const baseIndex = (i + j * NX) * 9;
       let rho = 0, ux = 0, uy = 0;
       for (let k = 0; k < 9; k++) {
-        const f_val = f[base + k];
+        const f_val = f[baseIndex + k];
         rho += f_val;
         ux += f_val * ex[k];
         uy += f_val * ey[k];
@@ -424,11 +619,15 @@
     return { ux, uy };
   }
 
-  /***** Update Particle Trails *****/
+  /***** Update Particle Trails *****
+   * Now particles are spawned at a rate controlled by the spawnRate slider.
+   *****/
   function updateParticles(dt) {
     simTime += dt;
     const speedFactor = 200;
-    for (let p of particles) {
+    // Update existing particles:
+    for (let i = particles.length - 1; i >= 0; i--) {
+      let p = particles[i];
       p.trail.push({x: p.x, y: p.y, t: simTime});
       while (p.trail.length > 0 && (simTime - p.trail[0].t) > tailLength) {
         p.trail.shift();
@@ -444,24 +643,29 @@
       if (p.y >= canvas.height) p.y -= canvas.height;
       p.age += dt;
       if (p.age > particleLifetime) {
-        p.x = Math.random() * canvas.width;
-        p.y = Math.random() * canvas.height;
-        p.age = 0;
-        p.trail = [];
+        particles.splice(i, 1);
       }
+    }
+    // Spawn new particles based on spawnRate:
+    particleSpawnAccumulator += dt * spawnRate;
+    while (particleSpawnAccumulator >= 1) {
+      spawnParticle();
+      particleSpawnAccumulator -= 1;
     }
   }
 
   /***** Painting in Map Editor Mode *****
-   * Instead of simply adding an offset, the brush now pushes the overall divergence
+   * Instead of simply adding an offset, the brush now pushes the overall ground temperature
    * (baseMap + editMap) toward the brush target value.
-   * For each affected cell the new overall divergence is:
-   *    newD = (1 - f)*D + f*T
-   * where D is the current overall divergence, T is the brush target,
-   * and f is the linear falloff factor (1 at center, 0 at brush edge).
+   * For each affected cell the new overall temperature is:
+   *    newT = (1 - f)*T + f*T_target
+   * where T is the current ground temperature, T_target is the brush target,
+   * and f is the linear falloff factor (modified here by the brush weight).
    * Since baseMap is fixed, we update editMap as:
-   *    newEditMap = newD - baseMap = (1 - f)*(baseMap + editMap) + f*T - baseMap.
+   *    newEditMap = newT - baseMap.
    *****/
+  // Global variable for brush weight (default 1)
+  let brushWeight = parseFloat(brushWeightSlider.value);
   function paintAt(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
     const mx = clientX - rect.left;
@@ -474,15 +678,15 @@
       for (let i = -brushRad; i <= brushRad; i++) {
         const dist = Math.sqrt(i * i + j * j);
         if (dist <= brushRad) {
-          const factor = 1 - (dist / brushRad); // linear falloff
+          let factor = 1 - (dist / brushRad); // linear falloff
+          factor *= brushWeight; // apply brush weight
           const gx = gridX + i;
           const gy = gridY + j;
           if (gx >= 0 && gx < NX && gy >= 0 && gy < NY) {
             const idx = gx + gy * NX;
-            const currentTotal = baseMap[idx] + editMap[idx]; // current overall divergence
+            const currentTotal = baseMap[idx] + editMap[idx];
             const newTotal = (1 - factor) * currentTotal + factor * brushTarget;
             let newEdit = newTotal - baseMap[idx];
-            // Clamp editMap to [-0.02, 0.02]
             if (newEdit > 0.02) newEdit = 0.02;
             if (newEdit < -0.02) newEdit = -0.02;
             editMap[idx] = newEdit;
@@ -519,13 +723,13 @@
   function drawSimulation() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (editorMode) {
-      // In editor mode, display the current divergence map (baseMap + editMap)
-      // Map the expected range [-0.02, 0.02] to grayscale [0,255]
+      // In editor mode, display the current ground temperature map (baseMap + editMap)
       for (let y = 0; y < NY; y++) {
         for (let x = 0; x < NX; x++) {
           const idx = x + y * NX;
-          let D = baseMap[idx] + editMap[idx];
-          let col = Math.floor(((D + 0.02) / 0.04) * 255);
+          let T_ground = baseMap[idx] + editMap[idx];
+          // Map from temperature range [-0.02,0.02] to grayscale [0,255]
+          let col = Math.floor(((T_ground + 0.02) / 0.04) * 255);
           col = Math.max(0, Math.min(255, col));
           ctx.fillStyle = `rgb(${col},${col},${col})`;
           ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
@@ -541,13 +745,13 @@
         ctx.stroke();
       }
     } else {
-      // In simulation mode, if "Show Divergence" is toggled, draw the divergence map.
       if (showDivergence) {
+        // In non-editor mode, if requested, show the ground temperature map.
         for (let y = 0; y < NY; y++) {
           for (let x = 0; x < NX; x++) {
             const idx = x + y * NX;
-            let D = baseMap[idx] + editMap[idx];
-            let col = Math.floor(((D + 0.02) / 0.04) * 255);
+            let T_ground = baseMap[idx] + editMap[idx];
+            let col = Math.floor(((T_ground + 0.02) / 0.04) * 255);
             col = Math.max(0, Math.min(255, col));
             ctx.fillStyle = `rgb(${col},${col},${col})`;
             ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
@@ -594,6 +798,7 @@
       const dtStep = dt / stepsPerFrame;
       for (let i = 0; i < stepsPerFrame; i++) {
         stepLBM(dtStep);
+        stepTLBM(dtStep);
       }
       updateParticles(dt);
     }

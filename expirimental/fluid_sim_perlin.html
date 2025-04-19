@@ -456,7 +456,7 @@
   let lastTime = performance.now();
   function loop() {
     const now = performance.now();
-    const dt = (now - lastTime) / 1000;
+    const dt = (now - lastTime) / 100;
     lastTime = now;
     const dtStep = dt / stepsPerFrame;
     for (let i = 0; i < stepsPerFrame; i++) {
