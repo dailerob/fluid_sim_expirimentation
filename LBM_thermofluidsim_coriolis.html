@@ -2,269 +2,618 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>LBM Fluid Simulation with Coriolis Force – Thermal Forcing with Constant Map Editor & Dynamic Perlin Noise</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LBM Fluid Simulation with Coriolis Force</title>
   <style>
-    body {
+    * {
       margin: 0;
-      background: #222;
-      color: #eee;
-      font-family: sans-serif;
-      user-select: none;
+      padding: 0;
+      box-sizing: border-box;
     }
-    #controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 20;
-      background: rgba(0,0,0,0.85);
-      padding: 10px;
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #0a0f1b;
+      color: #e0e6ed;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+    }
+
+    /* Main Layout */
+    #app-container {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+      position: relative;
+    }
+
+    /* Canvas Container */
+    #canvas-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #0f1922 0%, #0a0f1b 100%);
+      position: relative;
+    }
+
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       border-radius: 4px;
-      max-width: 320px;
     }
-    #controls > div {
-      margin-bottom: 5px;
+
+    /* Control Panel */
+    #controls {
+      width: 380px;
+      background: rgba(15, 25, 35, 0.95);
+      backdrop-filter: blur(10px);
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
     }
+
+    /* Header */
+    .header {
+      padding: 20px;
+      background: rgba(20, 30, 40, 0.8);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 12px;
+      color: #8b92a0;
+    }
+
+    /* Control Sections */
+    .control-section {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .control-section:last-child {
+      border-bottom: none;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #64b5f6;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Control Groups */
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-group label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #b8c5d6;
+      margin-bottom: 6px;
+    }
+
+    .control-value {
+      font-family: 'Courier New', monospace;
+      color: #4fc3f7;
+      font-size: 11px;
+      min-width: 45px;
+      text-align: right;
+    }
+
+    /* Sliders */
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #4fc3f7;
+      cursor: pointer;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #64b5f6;
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #4fc3f7;
+      cursor: pointer;
+      border-radius: 50%;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    /* Buttons */
+    button {
+      background: linear-gradient(135deg, #1976d2, #1565c0);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin: 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    button:hover {
+      background: linear-gradient(135deg, #1e88e5, #1976d2);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Button variations */
+    .btn-secondary {
+      background: linear-gradient(135deg, #455a64, #37474f);
+    }
+
+    .btn-secondary:hover {
+      background: linear-gradient(135deg, #546e7a, #455a64);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #43a047, #388e3c);
+    }
+
+    .btn-success:hover {
+      background: linear-gradient(135deg, #4caf50, #43a047);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #e53935, #d32f2f);
+    }
+
+    .btn-danger:hover {
+      background: linear-gradient(135deg, #ef5350, #e53935);
+    }
+
+    /* Button Groups */
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .button-group button {
+      flex: 1;
+      margin: 0;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    /* Editor Controls (hidden by default) */
     .editorControls {
       display: none;
-      margin-top: 10px;
-      border-top: 1px solid #555;
-      padding-top: 10px;
+      animation: slideIn 0.3s ease;
     }
-    canvas {
-      display: block;
-      margin: 0 auto;
-      background: #000;
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
-    label { font-size: 0.9em; }
-    #seasonalSliderCanvas {
-      background: #333;
-      margin-top: 10px;
-      display: block;
-    }
-    #timeDisplay {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      color: #eee;
-      background: rgba(0,0,0,0.5);
-      padding: 5px;
+
+    /* Select dropdown */
+    select {
+      background: rgba(255, 255, 255, 0.1);
+      color: #e0e6ed;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 6px 12px;
       border-radius: 4px;
+      font-size: 12px;
+      width: 100%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    select:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #4fc3f7;
+      box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+    }
+
+    /* Checkbox */
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    /* File input */
+    input[type="file"] {
+      display: none;
+    }
+
+    /* Info text */
+    .info-text {
+      font-size: 11px;
+      color: #8b92a0;
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+
+    /* Status info */
+    #stepCounter {
+      font-size: 11px;
+      color: #8b92a0;
+      text-align: center;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+      #app-container {
+        flex-direction: column;
+      }
+
+      #controls {
+        width: 100%;
+        max-height: 40vh;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        order: 2;
+      }
+
+      #canvas-container {
+        order: 1;
+        height: 60vh;
+      }
+
+      .header h1 {
+        font-size: 16px;
+      }
+
+      .control-section {
+        padding: 12px 16px;
+      }
+    }
+
+    /* Scrollbar styling */
+    #controls::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    #controls::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    #controls::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    #controls::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
     }
   </style>
 </head>
 <body>
-<!-- <div id="timeDisplay">1955</div> --> <!-- Time display commented out -->
-<div id="controls">
-  <!-- Simulation & Thermal Controls -->
-  <div>
-    <label>
-      Viscosity:
-      <input type="range" id="viscosity" min="0.01" max="0.2" step="0.005" value="0.075">
-    </label>
-    <span id="viscLabel">0.075</span>
+<div id="app-container">
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
   </div>
-  <div>
-    <label>
-      Damping:
-      <input type="range" id="damping" min="0" max="0.1" step="0.005" value="0.065">
-    </label>
-    <span id="dampLabel">0.065</span>
-  </div>
-  <div>
-    <label>
-      Noise Amplitude:
-      <input type="range" id="noiseAmplitude" min="0" max="0.005" step="0.0001" value="0.005">
-    </label>
-    <span id="noiseAmpLabel">0.005</span>
-  </div>
-  <div>
-    <label>
-      Noise Scale:
-      <input type="range" id="noiseScale" min="0.001" max="1" step="0.001" value="0.05">
-    </label>
-    <span id="noiseScaleLabel">0.050</span>
-  </div>
-  <div>
-    <label>
-      Noise Change Rate:
-      <input type="range" id="noiseChangeRate" min="0" max="0.1" step="0.001" value="0.010">
-    </label>
-    <span id="noiseChangeRateLabel">0.010</span>
-  </div>
-  <div>
-    <label>
-      Tail Length (sec):
-      <input type="range" id="tailLength" min="0.5" max="20" step="0.1" value="10">
-    </label>
-    <span id="tailLengthLabel">10.0</span>
-  </div>
-  <div>
-    <label>
-      Spawn Rate (particles/sec):
-      <input type="range" id="spawnRate" min="0" max="200" step="1" value="50">
-    </label>
-    <span id="spawnRateLabel">50</span>
-  </div>
-  <div>
-    <label>
-      Global Wind (x velocity):
-      <input type="range" id="globalWind" min="-0.02" max="0.02" step="0.0001" value="0">
-    </label>
-    <span id="globalWindLabel">0.00</span>
-  </div>
-  <!-- Thermal sliders: -->
-  <div>
-    <label>
-      Diffusion (D):
-      <input type="range" id="D_const" min="0.0" max="0.2" step="0.005" value="0.0">
-    </label>
-    <span id="D_constLabel">0.000</span>
-  </div>
-  <div>
-    <label>
-      Ground Conductivity (k):
-      <input type="range" id="k_const" min="0.0001" max="0.001" step="0.0001" value="0.0007">
-    </label>
-    <span id="k_constLabel">0.0007</span>
-  </div>
-  <div>
-    <label>
-      dpdt:
-      <input type="range" id="dpdt" min="100" max="10000" step="1" value="973">
-    </label>
-    <span id="dpdtLabel">300.00</span>
-  </div>
-  <div>
-    <label>
-      vc:
-      <input type="range" id="vc" min="0.1" max="20" step="0.1" value="1">
-    </label>
-    <span id="vcLabel">1</span>
-  </div>
-  <div>
-    <label>
-      d_max:
-      <input type="range" id="d_max" min="0" max="0.005" step="0.0001" value="0.003">
-    </label>
-    <span id="d_maxLabel">0.003</span>
-  </div>
-  <!-- New Base Map Shift parameter -->
-  <div>
-    <label>
-      Day–Night Speed:
-      <input type="range" id="dayNightSpeed" min="-0.005" max="0.005" step="0.0001" value="0.0">
-    </label>
-    <span id="dayNightSpeedLabel">0.0</span>
-  </div>
-  <!-- Simulation control buttons -->
-  <div>
-    <button id="resetSim">Reset Sim</button>
-    <button id="pauseSim">Resume</button>
-    <button id="stepFrame">Step Frame</button>
-    <span id="stepCounter">Steps: 0</span>
-  </div>
-  <div>
-    <button id="toggleDivergence">Show Divergence</button>
-    <button id="toggleTemperature">Show Temperature</button>
-    <button id="toggleLandMap">Show Land Map</button>
-  </div>
-  <!-- Map Editor Toggles -->
-  <div>
-    <button id="enterOriginalEditor">Enter Map Editor</button>
-    <button id="enterLandEditor">Enter Land Map Editor</button>
-  </div>
-  <!-- Original Map Editor Controls -->
-  <div id="editorControls" class="editorControls">
-    <div>
-      <label>
-         Brush Size:
-         <input type="range" id="brushSize" min="1" max="20" step="1" value="5">
-      </label>
-      <span id="brushSizeLabel">5</span>
+  
+  <div id="controls">
+    <div class="header">
+      <h1>LBM Fluid Simulation</h1>
+      <p>Lattice Boltzmann Method with Coriolis Force</p>
     </div>
-    <div>
-      <label>
-         Brush Value:
-         <input type="range" id="brushValue" min="-0.06" max="0.06" step="0.0001" value="0.010">
-      </label>
-      <span id="brushValueLabel">0.010</span>
+
+    <!-- Simulation Control -->
+    <div class="control-section">
+      <div class="section-title">Simulation Control</div>
+      <div class="button-group">
+        <button id="pauseSim" class="btn-success">Start</button>
+        <button id="resetSim" class="btn-danger">Reset</button>
+        <button id="stepFrame" class="btn-secondary">Step</button>
+      </div>
+      <div id="stepCounter">Steps: 0</div>
     </div>
-    <div>
-      <label>
-         Brush Weight:
-         <input type="range" id="brushWeight" min="0" max="1" step="0.01" value="1">
-      </label>
-      <span id="brushWeightLabel">1.00</span>
+
+    <!-- Fluid Dynamics -->
+    <div class="control-section">
+      <div class="section-title">Fluid Dynamics</div>
+      <div class="control-group">
+        <label>
+          Viscosity
+          <span class="control-value" id="viscLabel">0.2</span>
+        </label>
+        <input type="range" id="viscosity" min="0.01" max="0.2" step="0.005" value="0.2">
+      </div>
+      <div class="control-group">
+        <label>
+          Damping
+          <span class="control-value" id="dampLabel">0.1</span>
+        </label>
+        <input type="range" id="damping" min="0" max="0.1" step="0.005" value="0.1">
+      </div>
+      <div class="control-group">
+        <label>
+          Global Wind
+          <span class="control-value" id="globalWindLabel">0.00</span>
+        </label>
+        <input type="range" id="globalWind" min="-0.02" max="0.02" step="0.0001" value="0">
+      </div>
     </div>
-    <div>
-      <button id="clearPerlin">Clear Editor Edits</button>
-      <button id="clearEdit">Clear Editor</button>
-      <button id="saveMap">Save Map</button>
-      <button id="loadMap">Load Map</button>
-      <button id="returnOriginal">Return</button>
-      <input type="file" id="loadMapInput" accept="image/png" style="display:none;">
+
+    <!-- Noise Parameters -->
+    <div class="control-section">
+      <div class="section-title">Noise Parameters</div>
+      <div class="control-group">
+        <label>
+          Amplitude
+          <span class="control-value" id="noiseAmpLabel">0.005</span>
+        </label>
+        <input type="range" id="noiseAmplitude" min="0" max="0.005" step="0.0001" value="0.005">
+      </div>
+      <div class="control-group">
+        <label>
+          Scale
+          <span class="control-value" id="noiseScaleLabel">0.050</span>
+        </label>
+        <input type="range" id="noiseScale" min="0.001" max="1" step="0.001" value="0.05">
+      </div>
+      <div class="control-group">
+        <label>
+          Change Rate
+          <span class="control-value" id="noiseChangeRateLabel">0.010</span>
+        </label>
+        <input type="range" id="noiseChangeRate" min="0" max="0.1" step="0.001" value="0.010">
+      </div>
     </div>
-    <div style="font-size:0.8em; margin-top:5px;">
-      Paint ground temperature edits. These static edits are added to the constantly changing noise.
+
+    <!-- Particle System -->
+    <div class="control-section">
+      <div class="section-title">Particle System</div>
+      <div class="control-group">
+        <label>
+          Tail Length (s)
+          <span class="control-value" id="tailLengthLabel">10.0</span>
+        </label>
+        <input type="range" id="tailLength" min="0.5" max="20" step="0.1" value="10">
+      </div>
+      <div class="control-group">
+        <label>
+          Spawn Rate (p/s)
+          <span class="control-value" id="spawnRateLabel">50</span>
+        </label>
+        <input type="range" id="spawnRate" min="0" max="200" step="1" value="50">
+      </div>
     </div>
-  </div>
-  <!-- Land Map Editor Controls -->
-  <div id="landEditorControls" class="editorControls">
-    <div>
-      <label>
-         Mode:
-         <select id="landEditorMode">
-           <option value="edit">Edit Land/Water</option>
-           <option value="place">Place City</option>
-           <option value="delete">Delete City</option>
-         </select>
-      </label>
+
+    <!-- Thermal Parameters -->
+    <div class="control-section">
+      <div class="section-title">Thermal Parameters</div>
+      <div class="control-group">
+        <label>
+          Diffusion (D)
+          <span class="control-value" id="D_constLabel">0.000</span>
+        </label>
+        <input type="range" id="D_const" min="0.0" max="0.2" step="0.005" value="0.0">
+      </div>
+      <div class="control-group">
+        <label>
+          Conductivity (k)
+          <span class="control-value" id="k_constLabel">0.0007</span>
+        </label>
+        <input type="range" id="k_const" min="0.0001" max="0.001" step="0.0001" value="0.0007">
+      </div>
+      <div class="control-group">
+        <label>
+          dp/dt
+          <span class="control-value" id="dpdtLabel">973.00</span>
+        </label>
+        <input type="range" id="dpdt" min="100" max="10000" step="1" value="973">
+      </div>
+      <div class="control-group">
+        <label>
+          vc
+          <span class="control-value" id="vcLabel">1</span>
+        </label>
+        <input type="range" id="vc" min="0.1" max="20" step="0.1" value="1">
+      </div>
+      <div class="control-group">
+        <label>
+          d_max
+          <span class="control-value" id="d_maxLabel">0.003</span>
+        </label>
+        <input type="range" id="d_max" min="0" max="0.005" step="0.0001" value="0.003">
+      </div>
+      <div class="control-group">
+        <label>
+          Day-Night Speed
+          <span class="control-value" id="dayNightSpeedLabel">0.000</span>
+        </label>
+        <input type="range" id="dayNightSpeed" min="-0.005" max="0.005" step="0.0001" value="0.0">
+      </div>
     </div>
-    <div id="landEditControls">
-      <label>
-        Brush Size:
-        <input type="range" id="landBrushSize" min="1" max="20" step="1" value="5">
-      </label>
-      <span id="landBrushSizeLabel">5</span>
-      <br>
-      <label>
-        Set to Land:
-        <input type="checkbox" id="setToLand" checked>
-      </label>
+
+    <!-- Temperature Profile -->
+    <div class="control-section">
+      <div class="section-title">Temperature Profile</div>
+      <div class="control-group">
+        <label>
+          Pole Temperature
+          <span class="control-value" id="poleTempLabel">-0.004</span>
+        </label>
+        <input type="range" id="pole_temperature" min="-0.02" max="0.02" step="0.0001" value="-0.004">
+      </div>
+      <div class="control-group">
+        <label>
+          Equator Temperature
+          <span class="control-value" id="equatorTempLabel">0.010</span>
+        </label>
+        <input type="range" id="equator_temperature" min="-0.02" max="0.02" step="0.0001" value="0.01">
+      </div>
     </div>
-    <div>
-      <button id="clearLandMap">Clear Land Map</button>
-      <button id="saveLandMap">Save Land Map</button>
-      <button id="loadLandMap">Load Land Map</button>
-      <input type="file" id="loadLandMapInput" accept="image/png" style="display:none;">
-      <button id="returnLand">Return</button>
+
+    <!-- Visualization -->
+    <div class="control-section">
+      <div class="section-title">Visualization</div>
+      <div class="button-group">
+        <button id="toggleDivergence" class="btn-secondary">Divergence</button>
+        <button id="toggleTemperature" class="btn-secondary">Temperature</button>
+        <button id="toggleLandMap" class="btn-secondary">Land Map</button>
+      </div>
     </div>
-  </div>
-  <!-- System Settings and Save Results -->
-  <div>
-    <button id="saveSystemSettings">Save System Settings</button>
-    <button id="loadSystemSettings">Load System Settings</button>
-  </div>
-  <div>
-    <button id="saveResultsBtn">Save Results</button>
-  </div>
-  <!-- Pole/Equator Temperature Sliders -->
-  <div>
-    <label>
-      Pole Temperature:
-      <input type="range" id="pole_temperature" min="-0.02" max="0.02" step="0.0001" value="-0.004">
-    </label>
-    <span id="poleTempLabel">-0.004</span>
-  </div>
-  <div>
-    <label>
-      Equator Temperature:
-      <input type="range" id="equator_temperature" min="-0.02" max="0.02" step="0.0001" value="0.01">
-    </label>
-    <span id="equatorTempLabel">0.010</span>
+
+    <!-- Map Editors -->
+    <div class="control-section">
+      <div class="section-title">Map Editors</div>
+      <div class="button-group">
+        <button id="enterOriginalEditor" class="btn-secondary">Temperature Map</button>
+        <button id="enterLandEditor" class="btn-secondary">Land Map</button>
+      </div>
+    </div>
+
+    <!-- Original Map Editor Controls -->
+    <div id="editorControls" class="control-section editorControls">
+      <div class="section-title">Temperature Map Editor</div>
+      <div class="control-group">
+        <label>
+          Brush Size
+          <span class="control-value" id="brushSizeLabel">5</span>
+        </label>
+        <input type="range" id="brushSize" min="1" max="20" step="1" value="5">
+      </div>
+      <div class="control-group">
+        <label>
+          Brush Value
+          <span class="control-value" id="brushValueLabel">0.010</span>
+        </label>
+        <input type="range" id="brushValue" min="-0.06" max="0.06" step="0.0001" value="0.010">
+      </div>
+      <div class="control-group">
+        <label>
+          Brush Weight
+          <span class="control-value" id="brushWeightLabel">1.00</span>
+        </label>
+        <input type="range" id="brushWeight" min="0" max="1" step="0.01" value="1">
+      </div>
+      <div class="button-group">
+        <button id="clearEdit" class="btn-danger">Clear</button>
+        <button id="saveMap" class="btn-success">Save</button>
+        <button id="loadMap" class="btn-secondary">Load</button>
+        <button id="returnOriginal" class="btn-secondary">Return</button>
+      </div>
+      <p class="info-text">Paint ground temperature edits. These static edits are added to the constantly changing noise.</p>
+      <input type="file" id="loadMapInput" accept="image/png">
+    </div>
+
+    <!-- Land Map Editor Controls -->
+    <div id="landEditorControls" class="control-section editorControls">
+      <div class="section-title">Land Map Editor</div>
+      <div class="control-group">
+        <label>Mode</label>
+        <select id="landEditorMode">
+          <option value="edit">Edit Land/Water</option>
+          <option value="place">Place City</option>
+          <option value="delete">Delete City</option>
+        </select>
+      </div>
+      <div id="landEditControls">
+        <div class="control-group">
+          <label>
+            Brush Size
+            <span class="control-value" id="landBrushSizeLabel">5</span>
+          </label>
+          <input type="range" id="landBrushSize" min="1" max="20" step="1" value="5">
+        </div>
+        <div class="control-group">
+          <label>
+            <span>Set to Land</span>
+            <input type="checkbox" id="setToLand" checked>
+          </label>
+        </div>
+      </div>
+      <div class="button-group">
+        <button id="clearLandMap" class="btn-danger">Clear</button>
+        <button id="saveLandMap" class="btn-success">Save</button>
+        <button id="loadLandMap" class="btn-secondary">Load</button>
+        <button id="returnLand" class="btn-secondary">Return</button>
+      </div>
+      <input type="file" id="loadLandMapInput" accept="image/png">
+    </div>
+
+    <!-- System Settings -->
+    <div class="control-section">
+      <div class="section-title">System Settings</div>
+      <div class="button-group">
+        <button id="saveSystemSettings" class="btn-success">Save Settings</button>
+        <button id="loadSystemSettings" class="btn-secondary">Load Settings</button>
+      </div>
+      <div class="button-group">
+        <button id="saveResultsBtn" class="btn-secondary">Export Results</button>
+      </div>
+    </div>
   </div>
 </div>
-<canvas id="canvas"></canvas>
+
 <script>
   /***** Perlin Noise Implementation *****
    * Based on Ken Perlin's improved noise algorithm.
@@ -335,7 +684,7 @@
   /***** Simulation Parameters *****/
   const NX = 200;
   const NY = 100;
-  const cellSize = 4;
+  let cellSize = 4;
   const stepsPerFrame = 5;
 
   // Lattice parameters (D2Q9)
@@ -457,7 +806,6 @@
   const brushValueLabel = document.getElementById('brushValueLabel');
   const brushWeightSlider = document.getElementById('brushWeight');
   const brushWeightLabel = document.getElementById('brushWeightLabel');
-  const clearPerlinBtn = document.getElementById('clearPerlin');
   const clearEditBtn = document.getElementById('clearEdit');
   const saveMapBtn = document.getElementById('saveMap');
   const loadMapBtn = document.getElementById('loadMap');
@@ -555,25 +903,25 @@
     showDivergence = !showDivergence;
     if (showDivergence) {
       showTemperature = false;
-      toggleTemperatureBtn.textContent = "Show Temperature";
-      toggleDivergenceBtn.textContent = "Hide Divergence";
+      toggleTemperatureBtn.textContent = "Temperature";
+      toggleDivergenceBtn.textContent = "Divergence ✓";
     } else {
-      toggleDivergenceBtn.textContent = "Show Divergence";
+      toggleDivergenceBtn.textContent = "Divergence";
     }
   });
   toggleTemperatureBtn.addEventListener('click', () => {
     showTemperature = !showTemperature;
     if (showTemperature) {
       showDivergence = false;
-      toggleDivergenceBtn.textContent = "Show Divergence";
-      toggleTemperatureBtn.textContent = "Hide Temperature";
+      toggleDivergenceBtn.textContent = "Divergence";
+      toggleTemperatureBtn.textContent = "Temperature ✓";
     } else {
-      toggleTemperatureBtn.textContent = "Show Temperature";
+      toggleTemperatureBtn.textContent = "Temperature";
     }
   });
   toggleLandMapBtn.addEventListener('click', () => {
     showLandMap = !showLandMap;
-    toggleLandMapBtn.textContent = showLandMap ? "Hide Land Map" : "Show Land Map";
+    toggleLandMapBtn.textContent = showLandMap ? "Land Map ✓" : "Land Map";
   });
 
   /***** Editor Toggle Buttons *****/
@@ -614,9 +962,6 @@
     brushWeightLabel.textContent = parseFloat(e.target.value).toFixed(2);
   });
   // Clear the static editor edits (the dynamic noise remains unchanged)
-  clearPerlinBtn.addEventListener('click', () => {
-    initializeBaseTemperatureMap(); // Reset to base sinusoidal map
-  });
   clearEditBtn.addEventListener('click', () => {
     initializeBaseTemperatureMap(); // Reset to base sinusoidal map
   });
@@ -780,7 +1125,7 @@
 
   /***** Simulation Control Buttons *****/
   let paused = true;
-  pauseSimBtn.textContent = "Resume";
+  pauseSimBtn.textContent = "Start";
   resetSimBtn.addEventListener('click', () => {
     for (let y = 0; y < NY; y++) {
       for (let x = 0; x < NX; x++) {
@@ -800,7 +1145,7 @@
   });
   pauseSimBtn.addEventListener('click', () => {
     paused = !paused;
-    pauseSimBtn.textContent = paused ? "Resume" : "Pause";
+    pauseSimBtn.textContent = paused ? "Start" : "Pause";
   });
   stepFrameBtn.addEventListener('click', () => {
     if (!paused) {
@@ -812,9 +1157,43 @@
 
   /***** Canvas Setup *****/
   const canvas = document.getElementById('canvas');
-  canvas.width = NX * cellSize;
-  canvas.height = NY * cellSize;
   const ctx = canvas.getContext('2d');
+  
+  // Function to resize canvas to fit container while maintaining aspect ratio
+  function resizeCanvas() {
+    const container = document.getElementById('canvas-container');
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    // Calculate the aspect ratio of the simulation
+    const simAspectRatio = NX / NY;
+    
+    // Calculate the best fit
+    let canvasWidth, canvasHeight;
+    
+    if (containerWidth / containerHeight > simAspectRatio) {
+      // Container is wider than simulation aspect ratio
+      canvasHeight = containerHeight * 0.9; // 90% of container height
+      canvasWidth = canvasHeight * simAspectRatio;
+    } else {
+      // Container is taller than simulation aspect ratio
+      canvasWidth = containerWidth * 0.9; // 90% of container width
+      canvasHeight = canvasWidth / simAspectRatio;
+    }
+    
+    // Calculate cell size based on the canvas dimensions
+    cellSize = Math.floor(Math.min(canvasWidth / NX, canvasHeight / NY));
+    
+    // Set actual canvas dimensions
+    canvas.width = NX * cellSize;
+    canvas.height = NY * cellSize;
+  }
+  
+  // Initial resize
+  resizeCanvas();
+  
+  // Resize on window change
+  window.addEventListener('resize', resizeCanvas);
 
   /***** Particle System *****/
   const particles = [];
@@ -962,7 +1341,7 @@
           // plus a forcing term for the Coriolis acceleration.
           // Using a simple forcing scheme: add dtStep * weight * (ex[i]*force_x + ey[i]*force_y) * (1/cs2) [cs2 = 1/3].
           f[baseIndex + i] = f[baseIndex + i] - (f[baseIndex + i] - feqArray[baseIndex + i]) / tau + S_array[index] * weights[i]
-                              + dtStep * weights[i] * (ex[i] * force_x + ey[i] * force_y) * 1;
+                              + dtStep * weights[i] * (ex[i] * force_x + ey[i] * force_y) * 3;
         }
       }
     }
@@ -1095,41 +1474,6 @@
       }
     }
   }
-  function paintAtLand(clientX, clientY) {
-    const rect = canvas.getBoundingClientRect();
-    const mx = clientX - rect.left;
-    const my = clientY - rect.top;
-    const gridX = Math.floor(mx / cellSize);
-    const gridY = Math.floor(my / cellSize);
-    const mode = landEditorModeSelect.value;
-    if (mode === "edit") {
-      const brushRad = parseInt(landBrushSizeSlider.value);
-      const setLand = setToLandCheckbox.checked ? 1 : 0;
-      for (let j = -brushRad; j <= brushRad; j++) {
-        for (let i = -brushRad; i <= brushRad; i++) {
-          const dist = Math.sqrt(i * i + j * j);
-          if (dist <= brushRad) {
-            const gx = gridX + i;
-            const gy = gridY + j;
-            if (gx >= 0 && gx < NX && gy >= 0 && gy < NY) {
-              landMap[gx + gy * NX] = setLand;
-            }
-          }
-        }
-      }
-    } else if (mode === "place") {
-      const cityX = gridX;
-      const cityY = gridY;
-      let exists = cities.some(c => Math.abs(c.x - cityX) < 1 && Math.abs(c.y - cityY) < 1);
-      if (!exists) {
-        cities.push({x: cityX, y: cityY});
-      }
-    } else if (mode === "delete") {
-      const cityX = gridX;
-      const cityY = gridY;
-      cities = cities.filter(c => Math.abs(c.x - cityX) >= 1 || Math.abs(c.y - cityY) >= 1);
-    }
-  }
 
   canvas.addEventListener('mousedown', (e) => {
     if (currentEditor === "none") return;
@@ -1164,11 +1508,11 @@
       for (let y = 0; y < NY; y++) {
         for (let x = 0; x < NX; x++) {
           const idx = x + y * NX;
-          ctx.fillStyle = landMap[idx] === 1 ? 'green' : 'blue';
+          ctx.fillStyle = landMap[idx] === 1 ? '#228b22' : '#1e3a8a';
           ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
         }
       }
-      ctx.fillStyle = 'yellow';
+      ctx.fillStyle = '#fbbf24';
       for (let c of cities) {
         const cx = (c.x + 0.5) * cellSize;
         const cy = (c.y + 0.5) * cellSize;
@@ -1194,7 +1538,7 @@
         }
       }
       if (painting) {
-        ctx.strokeStyle = 'red';
+        ctx.strokeStyle = '#ef4444';
         ctx.lineWidth = 2;
         const r = parseInt(brushSizeSlider.value) * cellSize;
         ctx.beginPath();
@@ -1225,10 +1569,11 @@
           }
         }
       } else {
-        ctx.fillStyle = 'black';
+        ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
-      ctx.strokeStyle = 'yellow';
+      // Enhanced particle rendering with glow effect
+      ctx.strokeStyle = '#00ffff';
       ctx.lineWidth = 2;
       for (let p of particles) {
         if (p.trail.length > 1) {
@@ -1248,10 +1593,14 @@
             ctx.stroke();
           }
         }
+        // Particle with glow
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00ffff';
         ctx.fillStyle = 'rgba(0,255,255,1)';
         ctx.beginPath();
         ctx.arc(p.x, p.y, 2, 0, 2 * Math.PI);
         ctx.fill();
+        ctx.shadowBlur = 0;
       }
     }
   }
@@ -1304,7 +1653,8 @@
         d_max: d_max,
         dayNightSpeed: dayNightSpeed,
         pole_temperature: pole_temperature,
-        equator_temperature: equator_temperature
+        equator_temperature: equator_temperature,
+        globalWind: globalWind
       },
       groundMaps: {
         editMap: Array.from(editMap)
@@ -1341,12 +1691,30 @@
         dpdt = settings.sliders.dpdt;
         vc = settings.sliders.vc;
         d_max = settings.sliders.d_max;
-        dayNightSpeedSlider.value = settings.sliders.dayNightSpeed;
+        dayNightSpeed = settings.sliders.dayNightSpeed || 0;
         pole_temperature = settings.sliders.pole_temperature !== undefined ? settings.sliders.pole_temperature : -0.004;
         equator_temperature = settings.sliders.equator_temperature !== undefined ? settings.sliders.equator_temperature : 0.01;
+        globalWind = settings.sliders.globalWind || 0;
+
+        // Update slider values
+        visSlider.value = viscosity;
+        dampSlider.value = damping;
+        noiseAmpSlider.value = noiseAmplitude;
+        noiseScaleSlider.value = noiseScale;
+        noiseChangeRateSlider.value = noiseChangeRate;
+        tailLengthSlider.value = tailLength;
+        spawnRateSlider.value = spawnRate;
+        D_constSlider.value = D_const;
+        k_constSlider.value = k_const;
+        dpdtSlider.value = dpdt;
+        vcSlider.value = vc;
+        d_maxSlider.value = d_max;
+        dayNightSpeedSlider.value = dayNightSpeed;
         poleTempSlider.value = pole_temperature;
         equatorTempSlider.value = equator_temperature;
+        globalWindSlider.value = globalWind;
 
+        // Update labels
         viscLabel.textContent = viscosity.toFixed(3);
         dampLabel.textContent = damping.toFixed(3);
         noiseAmpLabel.textContent = noiseAmplitude.toFixed(3);
@@ -1359,9 +1727,10 @@
         dpdtLabel.textContent = dpdt.toFixed(2);
         vcLabel.textContent = vc.toFixed(0);
         d_maxLabel.textContent = d_max.toFixed(3);
-        dayNightSpeedLabel.textContent = parseFloat(settings.sliders.dayNightSpeed).toFixed(3);
+        dayNightSpeedLabel.textContent = dayNightSpeed.toFixed(3);
         poleTempLabel.textContent = pole_temperature.toFixed(3);
         equatorTempLabel.textContent = equator_temperature.toFixed(3);
+        globalWindLabel.textContent = globalWind.toFixed(2);
 
         editMap = new Float32Array(settings.groundMaps.editMap);
         if (settings.landMap) { // Check if landMap exists before loading
@@ -1370,6 +1739,9 @@
         if (settings.cities) { // Check if cities exist before loading
           cities = settings.cities;
         }
+        
+        // Update tau
+        tau = viscosity * 3 + 0.5;
       }
       reader.readAsText(file);
     }
