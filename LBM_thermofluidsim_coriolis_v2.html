@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LBM Fluid Simulation with Coriolis Force</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #0a0f1b;
+      color: #e0e6ed;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+    }
+
+    /* Main Layout */
+    #app-container {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+      position: relative;
+    }
+
+    /* Canvas Container */
+    #canvas-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #0f1922 0%, #0a0f1b 100%);
+      position: relative;
+    }
+
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      border-radius: 4px;
+    }
+
+    /* Control Panel */
+    #controls {
+      width: 380px;
+      background: rgba(15, 25, 35, 0.95);
+      backdrop-filter: blur(10px);
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      padding: 20px;
+      background: rgba(20, 30, 40, 0.8);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 12px;
+      color: #8b92a0;
+    }
+
+    /* Control Sections */
+    .control-section {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .control-section:last-child {
+      border-bottom: none;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #64b5f6;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Control Groups */
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-group label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #b8c5d6;
+      margin-bottom: 6px;
+    }
+
+    .control-value {
+      font-family: 'Courier New', monospace;
+      color: #4fc3f7;
+      font-size: 11px;
+      min-width: 45px;
+      text-align: right;
+    }
+
+    /* Sliders */
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #4fc3f7;
+      cursor: pointer;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #64b5f6;
+      transform: scale(1.2);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #4fc3f7;
+      cursor: pointer;
+      border-radius: 50%;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    /* Buttons */
+    button {
+      background: linear-gradient(135deg, #1976d2, #1565c0);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin: 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    button:hover {
+      background: linear-gradient(135deg, #1e88e5, #1976d2);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Button variations */
+    .btn-secondary {
+      background: linear-gradient(135deg, #455a64, #37474f);
+    }
+
+    .btn-secondary:hover {
+      background: linear-gradient(135deg, #546e7a, #455a64);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #43a047, #388e3c);
+    }
+
+    .btn-success:hover {
+      background: linear-gradient(135deg, #4caf50, #43a047);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #e53935, #d32f2f);
+    }
+
+    .btn-danger:hover {
+      background: linear-gradient(135deg, #ef5350, #e53935);
+    }
+
+    /* Button Groups */
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .button-group button {
+      flex: 1;
+      margin: 0;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    /* Editor Controls (hidden by default) */
+    .editorControls {
+      display: none;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Select dropdown */
+    select {
+      background: rgba(255, 255, 255, 0.1);
+      color: #e0e6ed;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      width: 100%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    select:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #4fc3f7;
+      box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+    }
+
+    /* Checkbox */
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    /* File input */
+    input[type="file"] {
+      display: none;
+    }
+
+    /* Info text */
+    .info-text {
+      font-size: 11px;
+      color: #8b92a0;
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+
+    /* Status info */
+    #stepCounter {
+      font-size: 11px;
+      color: #8b92a0;
+      text-align: center;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+      #app-container {
+        flex-direction: column;
+      }
+
+      #controls {
+        width: 100%;
+        max-height: 40vh;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        order: 2;
+      }
+
+      #canvas-container {
+        order: 1;
+        height: 60vh;
+      }
+
+      .header h1 {
+        font-size: 16px;
+      }
+
+      .control-section {
+        padding: 12px 16px;
+      }
+    }
+
+    /* Scrollbar styling */
+    #controls::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    #controls::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    #controls::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    #controls::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+<body>
+<div id="app-container">
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+  
+  <div id="controls">
+    <div class="header">
+      <h1>LBM Fluid Simulation</h1>
+      <p>Lattice Boltzmann Method with Coriolis Force</p>
+    </div>
+
+    <!-- Simulation Control -->
+    <div class="control-section">
+      <div class="section-title">Simulation Control</div>
+      <div class="button-group">
+        <button id="pauseSim" class="btn-success">Start</button>
+        <button id="resetSim" class="btn-danger">Reset</button>
+        <button id="stepFrame" class="btn-secondary">Step</button>
+      </div>
+      <div id="stepCounter">Steps: 0</div>
+    </div>
+
+    <!-- Fluid Dynamics -->
+    <div class="control-section">
+      <div class="section-title">Fluid Dynamics</div>
+      <div class="control-group">
+        <label>
+          Viscosity
+          <span class="control-value" id="viscLabel">0.2</span>
+        </label>
+        <input type="range" id="viscosity" min="0.01" max="0.2" step="0.005" value="0.2">
+      </div>
+      <div class="control-group">
+        <label>
+          Damping
+          <span class="control-value" id="dampLabel">0.1</span>
+        </label>
+        <input type="range" id="damping" min="0" max="0.1" step="0.005" value="0.1">
+      </div>
+      <div class="control-group">
+        <label>
+          Global Wind
+          <span class="control-value" id="globalWindLabel">0.00</span>
+        </label>
+        <input type="range" id="globalWind" min="-0.02" max="0.02" step="0.0001" value="0">
+      </div>
+    </div>
+
+    <!-- Noise Parameters -->
+    <div class="control-section">
+      <div class="section-title">Noise Parameters</div>
+      <div class="control-group">
+        <label>
+          Amplitude
+          <span class="control-value" id="noiseAmpLabel">0.005</span>
+        </label>
+        <input type="range" id="noiseAmplitude" min="0" max="0.005" step="0.0001" value="0.005">
+      </div>
+      <div class="control-group">
+        <label>
+          Scale
+          <span class="control-value" id="noiseScaleLabel">0.050</span>
+        </label>
+        <input type="range" id="noiseScale" min="0.001" max="1" step="0.001" value="0.05">
+      </div>
+      <div class="control-group">
+        <label>
+          Change Rate
+          <span class="control-value" id="noiseChangeRateLabel">0.010</span>
+        </label>
+        <input type="range" id="noiseChangeRate" min="0" max="0.1" step="0.001" value="0.010">
+      </div>
+    </div>
+
+    <!-- Particle System -->
+    <div class="control-section">
+      <div class="section-title">Particle System</div>
+      <div class="control-group">
+        <label>
+          Tail Length (s)
+          <span class="control-value" id="tailLengthLabel">10.0</span>
+        </label>
+        <input type="range" id="tailLength" min="0.5" max="20" step="0.1" value="10">
+      </div>
+      <div class="control-group">
+        <label>
+          Spawn Rate (p/s)
+          <span class="control-value" id="spawnRateLabel">50</span>
+        </label>
+        <input type="range" id="spawnRate" min="0" max="200" step="1" value="50">
+      </div>
+    </div>
+
+    <!-- Thermal Parameters -->
+    <div class="control-section">
+      <div class="section-title">Thermal Parameters</div>
+      <div class="control-group">
+        <label>
+          Diffusion (D)
+          <span class="control-value" id="D_constLabel">0.000</span>
+        </label>
+        <input type="range" id="D_const" min="0.0" max="0.2" step="0.005" value="0.0">
+      </div>
+      <div class="control-group">
+        <label>
+          Conductivity (k)
+          <span class="control-value" id="k_constLabel">0.0007</span>
+        </label>
+        <input type="range" id="k_const" min="0.0001" max="0.001" step="0.0001" value="0.0007">
+      </div>
+      <div class="control-group">
+        <label>
+          dp/dt
+          <span class="control-value" id="dpdtLabel">973.00</span>
+        </label>
+        <input type="range" id="dpdt" min="100" max="10000" step="1" value="973">
+      </div>
+      <div class="control-group">
+        <label>
+          vc
+          <span class="control-value" id="vcLabel">1</span>
+        </label>
+        <input type="range" id="vc" min="0.1" max="20" step="0.1" value="1">
+      </div>
+      <div class="control-group">
+        <label>
+          d_max
+          <span class="control-value" id="d_maxLabel">0.003</span>
+        </label>
+        <input type="range" id="d_max" min="0" max="0.005" step="0.0001" value="0.003">
+      </div>
+      <div class="control-group">
+        <label>
+          Day-Night Speed
+          <span class="control-value" id="dayNightSpeedLabel">0.000</span>
+        </label>
+        <input type="range" id="dayNightSpeed" min="-0.005" max="0.005" step="0.0001" value="0.0">
+      </div>
+    </div>
+
+    <!-- Temperature Profile -->
+    <div class="control-section">
+      <div class="section-title">Temperature Profile</div>
+      <div class="control-group">
+        <label>
+          Pole Temperature
+          <span class="control-value" id="poleTempLabel">-0.004</span>
+        </label>
+        <input type="range" id="pole_temperature" min="-0.02" max="0.02" step="0.0001" value="-0.004">
+      </div>
+      <div class="control-group">
+        <label>
+          Equator Temperature
+          <span class="control-value" id="equatorTempLabel">0.010</span>
+        </label>
+        <input type="range" id="equator_temperature" min="-0.02" max="0.02" step="0.0001" value="0.01">
+      </div>
+    </div>
+
+    <!-- Visualization -->
+    <div class="control-section">
+      <div class="section-title">Visualization</div>
+      <div class="button-group">
+        <button id="toggleDivergence" class="btn-secondary">Divergence</button>
+        <button id="toggleTemperature" class="btn-secondary">Temperature</button>
+        <button id="toggleLandMap" class="btn-secondary">Land Map</button>
+      </div>
+    </div>
+
+    <!-- System Settings -->
+    <div class="control-section">
+      <div class="section-title">System Settings</div>
+      <div class="button-group">
+        <button id="saveSystemSettings" class="btn-success">Save Settings</button>
+        <button id="loadSystemSettings" class="btn-secondary">Load Settings</button>
+      </div>
+      <div class="button-group">
+        <button id="saveResultsBtn" class="btn-secondary">Export Results</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /***** Perlin Noise Implementation *****
+   * Based on Ken Perlin's improved noise algorithm.
+   *****/
+  var PerlinNoise = {
+    permutation: [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,
+      69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,
+      11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,
+      166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,
+      143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,
+      159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,
+      85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,
+      163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,
+      112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,
+      14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,
+      236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180],
+    p: [],
+    init: function() {
+      for (let i = 0; i < 256; i++) {
+        this.p[i] = this.permutation[i];
+      }
+      for (let i = 0; i < 256; i++) {
+        this.p[256 + i] = this.p[i];
+      }
+    },
+    fade: function(t) { return t * t * t * (t * (t * 6 - 15) + 10); },
+    lerp: function(t, a, b) { return a + t * (b - a); },
+    grad: function(hash, x, y, z) {
+      let h = hash & 15;
+      let u = h < 8 ? x : y;
+      let v = h < 4 ? y : (h === 12 || h === 14 ? x : z);
+      return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    },
+    noise: function(x, y, z) {
+      let X = Math.floor(x) & 255;
+      let Y = Math.floor(y) & 255;
+      let Z = Math.floor(z) & 255;
+      x -= Math.floor(x);
+      y -= Math.floor(y);
+      z -= Math.floor(z);
+      let u = this.fade(x);
+      let v = this.fade(y);
+      let w = this.fade(z);
+      let A = this.p[X] + Y;
+      let AA = this.p[A] + Z;
+      let AB = this.p[A + 1] + Z;
+      let B = this.p[X + 1] + Y;
+      let BA = this.p[B] + Z;
+      let BB = this.p[B + 1] + Z;
+      return this.lerp(w,
+          this.lerp(v,
+              this.lerp(u, this.grad(this.p[AA], x, y, z),
+                           this.grad(this.p[this.p[B] + Z], x - 1, y, z)),
+              this.lerp(u, this.grad(this.p[AB], x, y - 1, z),
+                           this.grad(this.p[BB], x - 1, y - 1, z))
+          ),
+          this.lerp(v,
+              this.lerp(u, this.grad(this.p[AA + 1], x, y, z - 1),
+                           this.grad(this.p[BA + 1], x - 1, y, z - 1)),
+              this.lerp(u, this.grad(this.p[AB + 1], x, y - 1, z - 1),
+                           this.grad(this.p[BB + 1], x - 1, y - 1, z - 1))
+          )
+      );
+    }
+  };
+  PerlinNoise.init();
+
+  /***** Simulation Parameters *****/
+  const NX = 200;
+  const NY = 100;
+  let cellSize = 4;
+  const stepsPerFrame = 5;
+
+  // Lattice parameters (D2Q9)
+  const ex = [0, 1, 0, -1, 0, 1, -1, -1, 1];
+  const ey = [0, 0, 1, 0, -1, 1, 1, -1, -1];
+  const weights = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
+  const cs2 = 1/3;
+
+  let f = new Float32Array(NX * NY * 9);
+  let fTemp = new Float32Array(NX * NY * 9);
+
+  // Fluid simulation parameters
+  let viscosity = parseFloat(document.getElementById('viscosity').value);
+  let tau = viscosity * 3 + 0.5;
+  let damping = parseFloat(document.getElementById('damping').value);
+  let noiseAmplitude = parseFloat(document.getElementById('noiseAmplitude').value);
+  let noiseScale = parseFloat(document.getElementById('noiseScale').value);
+  let noiseChangeRate = parseFloat(document.getElementById('noiseChangeRate').value);
+  let tailLength = parseFloat(document.getElementById('tailLength').value);
+  let spawnRate = parseFloat(document.getElementById('spawnRate').value);
+
+  // Thermal parameters
+  let D_const = parseFloat(document.getElementById('D_const').value);
+  let k_const = parseFloat(document.getElementById('k_const').value);
+  let dpdt = parseFloat(document.getElementById('dpdt').value);
+  let vc = parseFloat(document.getElementById('vc').value);
+  let d_max = parseFloat(document.getElementById('d_max').value);
+
+  // Day–Night shifting
+  let dayNightSpeed = parseFloat(document.getElementById('dayNightSpeed').value);
+
+  // Pole/Equator Temperatures
+  let pole_temperature = parseFloat(document.getElementById('pole_temperature').value);
+  let equator_temperature = parseFloat(document.getElementById('equator_temperature').value);
+
+  let showDivergence = false;
+  let showTemperature = false;
+  let showLandMap = false;
+
+  // Editor state removed
+  let currentEditor = "none";
+  let painting = false;
+  let editorMousePos = { x: 0, y: 0 };
+
+  // Temperature map (base profile only; no editor)
+  let editMap = new Float32Array(NX * NY);
+
+  function initializeBaseTemperatureMap() {
+    const poleTemp = pole_temperature;
+    const equatorTemp = equator_temperature;
+    for (let y = 0; y < NY; y++) {
+      const cos_val = Math.cos(Math.PI * (y - (NY - 1) / 2) / ((NY - 1) / 2));
+      const temp = (poleTemp + equatorTemp) / 2 + (equatorTemp - poleTemp) / 2 * cos_val;
+      for (let x = 0; x < NX; x++) {
+        editMap[x + y * NX] = temp;
+      }
+    }
+  }
+  initializeBaseTemperatureMap();
+
+  // Air temperature per cell
+  let airTemp = new Float32Array(NX * NY);
+  for (let i = 0; i < NX * NY; i++) airTemp[i] = 0;
+
+  /***** Land Map & Cities *****/
+  let landMap = new Uint8Array(NX * NY);
+  for (let i = 0; i < NX * NY; i++) { landMap[i] = 0; }
+  let cities = [];
+
+  /***** UI Elements *****/
+  const visSlider = document.getElementById('viscosity');
+  const viscLabel = document.getElementById('viscLabel');
+  const dampSlider = document.getElementById('damping');
+  const dampLabel = document.getElementById('dampLabel');
+  const noiseAmpSlider = document.getElementById('noiseAmplitude');
+  const noiseAmpLabel = document.getElementById('noiseAmpLabel');
+  const noiseScaleSlider = document.getElementById('noiseScale');
+  const noiseScaleLabel = document.getElementById('noiseScaleLabel');
+  const noiseChangeRateSlider = document.getElementById('noiseChangeRate');
+  const noiseChangeRateLabel = document.getElementById('noiseChangeRateLabel');
+  const tailLengthSlider = document.getElementById('tailLength');
+  const tailLengthLabel = document.getElementById('tailLengthLabel');
+  const spawnRateSlider = document.getElementById('spawnRate');
+  const spawnRateLabel = document.getElementById('spawnRateLabel');
+  const D_constSlider = document.getElementById('D_const');
+  const D_constLabel = document.getElementById('D_constLabel');
+  const k_constSlider = document.getElementById('k_const');
+  const k_constLabel = document.getElementById('k_constLabel');
+  const dpdtSlider = document.getElementById('dpdt');
+  const dpdtLabel = document.getElementById('dpdtLabel');
+  const vcSlider = document.getElementById('vc');
+  const vcLabel = document.getElementById('vcLabel');
+  const d_maxSlider = document.getElementById('d_max');
+  const d_maxLabel = document.getElementById('d_maxLabel');
+  const dayNightSpeedSlider = document.getElementById('dayNightSpeed');
+  const dayNightSpeedLabel = document.getElementById('dayNightSpeedLabel');
+  const globalWindSlider = document.getElementById('globalWind');
+  const globalWindLabel = document.getElementById('globalWindLabel');
+  let globalWind = parseFloat(globalWindSlider.value);
+  globalWindSlider.addEventListener('input', (e) => {
+    globalWind = parseFloat(e.target.value);
+    globalWindLabel.textContent = globalWind.toFixed(2);
+  });
+  const toggleDivergenceBtn = document.getElementById('toggleDivergence');
+  const toggleTemperatureBtn = document.getElementById('toggleTemperature');
+  const toggleLandMapBtn = document.getElementById('toggleLandMap');
+
+  const saveSystemSettingsBtn = document.getElementById('saveSystemSettings');
+  const loadSystemSettingsBtn = document.getElementById('loadSystemSettings');
+  const saveResultsBtn = document.getElementById('saveResultsBtn');
+  const resetSimBtn = document.getElementById('resetSim');
+  const pauseSimBtn = document.getElementById('pauseSim');
+  const stepCounter = document.getElementById('stepCounter');
+  const stepFrameBtn = document.getElementById('stepFrame');
+  const poleTempSlider = document.getElementById('pole_temperature');
+  const poleTempLabel = document.getElementById('poleTempLabel');
+  const equatorTempSlider = document.getElementById('equator_temperature');
+  const equatorTempLabel = document.getElementById('equatorTempLabel');
+
+  /***** Event Listeners for Simulation Sliders *****/
+  visSlider.addEventListener('input', (e) => {
+    viscosity = parseFloat(e.target.value);
+    tau = viscosity * 3 + 0.5;
+    viscLabel.textContent = viscosity.toFixed(3);
+  });
+  dampSlider.addEventListener('input', (e) => {
+    damping = parseFloat(e.target.value);
+    dampLabel.textContent = damping.toFixed(3);
+  });
+  noiseAmpSlider.addEventListener('input', (e) => {
+    noiseAmplitude = parseFloat(e.target.value);
+    noiseAmpLabel.textContent = noiseAmplitude.toFixed(3);
+  });
+  noiseScaleSlider.addEventListener('input', (e) => {
+    noiseScale = parseFloat(e.target.value);
+    noiseScaleLabel.textContent = noiseScale.toFixed(3);
+  });
+  noiseChangeRateSlider.addEventListener('input', (e) => {
+    noiseChangeRate = parseFloat(e.target.value);
+    noiseChangeRateLabel.textContent = noiseChangeRate.toFixed(3);
+  });
+  tailLengthSlider.addEventListener('input', (e) => {
+    tailLength = parseFloat(e.target.value);
+    tailLengthLabel.textContent = tailLength.toFixed(1);
+  });
+  spawnRateSlider.addEventListener('input', (e) => {
+    spawnRate = parseFloat(e.target.value);
+    spawnRateLabel.textContent = spawnRate;
+  });
+  D_constSlider.addEventListener('input', (e) => {
+    D_const = parseFloat(e.target.value);
+    D_constLabel.textContent = D_const.toFixed(3);
+  });
+  k_constSlider.addEventListener('input', (e) => {
+    k_const = parseFloat(e.target.value);
+    k_constLabel.textContent = k_const.toFixed(3);
+  });
+  dpdtSlider.addEventListener('input', (e) => {
+    dpdt = parseFloat(e.target.value);
+    dpdtLabel.textContent = dpdt.toFixed(2);
+  });
+  vcSlider.addEventListener('input', (e) => {
+    vc = parseFloat(e.target.value);
+    vcLabel.textContent = vc.toFixed(0);
+  });
+  d_maxSlider.addEventListener('input', (e) => {
+    d_max = parseFloat(e.target.value);
+    d_maxLabel.textContent = d_max.toFixed(3);
+  });
+  dayNightSpeedSlider.addEventListener('input', (e) => {
+    dayNightSpeed = parseFloat(e.target.value);
+    dayNightSpeedLabel.textContent = dayNightSpeed.toFixed(3);
+  });
+  poleTempSlider.addEventListener('input', (e) => {
+    pole_temperature = parseFloat(e.target.value);
+    poleTempLabel.textContent = pole_temperature.toFixed(3);
+    initializeBaseTemperatureMap();
+  });
+  equatorTempSlider.addEventListener('input', (e) => {
+    equator_temperature = parseFloat(e.target.value);
+    equatorTempLabel.textContent = equator_temperature.toFixed(3);
+    initializeBaseTemperatureMap();
+  });
+
+  /***** Toggle Buttons *****/
+  toggleDivergenceBtn.addEventListener('click', () => {
+    showDivergence = !showDivergence;
+    if (showDivergence) {
+      showTemperature = false;
+      toggleTemperatureBtn.textContent = "Temperature";
+      toggleDivergenceBtn.textContent = "Divergence ✓";
+    } else {
+      toggleDivergenceBtn.textContent = "Divergence";
+    }
+  });
+  toggleTemperatureBtn.addEventListener('click', () => {
+    showTemperature = !showTemperature;
+    if (showTemperature) {
+      showDivergence = false;
+      toggleDivergenceBtn.textContent = "Divergence";
+      toggleTemperatureBtn.textContent = "Temperature ✓";
+    } else {
+      toggleTemperatureBtn.textContent = "Temperature";
+    }
+  });
+  toggleLandMapBtn.addEventListener('click', () => {
+    showLandMap = !showLandMap;
+    toggleLandMapBtn.textContent = showLandMap ? "Land Map ✓" : "Land Map";
+  });
+
+  /***** Simulation Control Buttons *****/
+  let paused = true;
+  pauseSimBtn.textContent = "Start";
+  resetSimBtn.addEventListener('click', () => {
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const baseIndex = (x + y * NX) * 9;
+        for (let i = 0; i < 9; i++) {
+          f[baseIndex + i] = weights[i];
+        }
+      }
+    }
+    particles.length = 0;
+    particleSpawnAccumulator = 0;
+    simTime = 0;
+    simStepCount = 0;
+    initializeBaseTemperatureMap();
+    for (let i = 0; i < NX * NY; i++) airTemp[i] = 0;
+  });
+  pauseSimBtn.addEventListener('click', () => {
+    paused = !paused;
+    pauseSimBtn.textContent = paused ? "Start" : "Pause";
+  });
+  stepFrameBtn.addEventListener('click', () => {
+    if (!paused) {
+      alert("Pause simulation before stepping frame by frame.");
+      return;
+    }
+    stepFrame();
+  });
+
+  /***** Canvas Setup *****/
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  function resizeCanvas() {
+    const container = document.getElementById('canvas-container');
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const simAspectRatio = NX / NY;
+    let canvasWidth, canvasHeight;
+    if (containerWidth / containerHeight > simAspectRatio) {
+      canvasHeight = containerHeight * 0.9;
+      canvasWidth = canvasHeight * simAspectRatio;
+    } else {
+      canvasWidth = containerWidth * 0.9;
+      canvasHeight = canvasWidth / simAspectRatio;
+    }
+    cellSize = Math.floor(Math.min(canvasWidth / NX, canvasHeight / NY));
+    canvas.width = NX * cellSize;
+    canvas.height = NY * cellSize;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  /***** Particle System *****/
+  const particles = [];
+  const particleLifetime = 15;
+  let particleSpawnAccumulator = 0;
+  function spawnParticle() {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      age: 0,
+      trail: []
+    });
+  }
+
+  /***** Initialize LBM Grid (ρ = 1, u = 0) *****/
+  for (let y = 0; y < NY; y++) {
+    for (let x = 0; x < NX; x++) {
+      const baseIndex = (x + y * NX) * 9;
+      for (let i = 0; i < 9; i++) {
+        f[baseIndex + i] = weights[i];
+      }
+    }
+  }
+
+  /***** Main LBM & Thermal Step *****/
+  let lastS = new Float32Array(NX * NY);
+  const Omega = 0.4;
+  function stepLBM(dtStep) {
+    const feqArray = new Float32Array(NX * NY * 9);
+    const cellVel = new Array(NX * NY);
+    const cellVavg = new Float32Array(NX * NY);
+
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const index = x + y * NX;
+        const baseIndex = index * 9;
+        let rho = 0, momX = 0, momY = 0;
+        for (let i = 0; i < 9; i++) {
+          const fi = f[baseIndex + i];
+          rho += fi;
+          momX += fi * ex[i];
+          momY += fi * ey[i];
+        }
+        const ux = momX / rho;
+        const uy = momY / rho;
+        cellVel[index] = { ux, uy };
+        cellVavg[index] = (Math.abs(ux) + Math.abs(uy)) / 2;
+        const uSq = ux * ux + uy * uy;
+        for (let i = 0; i < 9; i++) {
+          const e_dot_u = ex[i] * ux + ey[i] * uy;
+          feqArray[baseIndex + i] = weights[i] * rho * (1 + 3 * e_dot_u + 4.5 * e_dot_u * e_dot_u - 1.5 * uSq);
+        }
+      }
+    }
+
+    const t_inc_average = new Float32Array(NX * NY);
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const index = x + y * NX;
+        let sum = 0, weightSum = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = (x + dx + NX) % NX;
+            const ny = (y + dy + NY) % NY;
+            const nIndex = nx + ny * NX;
+            const rx = -dx, ry = -dy;
+            const nVel = cellVel[nIndex];
+            const dot = nVel.ux * rx + nVel.uy * ry;
+            if (dot > 0) {
+              weightSum += dot;
+              sum += dot * airTemp[nIndex];
+            }
+          }
+        }
+        t_inc_average[index] = weightSum > 0 ? (sum / weightSum) : airTemp[index];
+      }
+    }
+
+    const t_inc = new Float32Array(NX * NY);
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const index = x + y * NX;
+        const t_prior = airTemp[index];
+        const alpha = Math.min(1, vc * cellVavg[index]);
+        t_inc[index] = alpha * t_inc_average[index] + (1 - alpha) * t_prior;
+      }
+    }
+
+    const t_avg_adj = new Float32Array(NX * NY);
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const index = x + y * NX;
+        let s = 0, cnt = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = (x + dx + NX) % NX;
+            const ny = (y + dy + NY) % NY;
+            const nIndex = nx + ny * NX;
+            s += t_inc[nIndex];
+            cnt++;
+          }
+        }
+        t_avg_adj[index] = s / cnt;
+      }
+    }
+
+    const S_array = new Float32Array(NX * NY);
+    const t_final_array = new Float32Array(NX * NY);
+    let shiftAmount = (simTime * dayNightSpeed * NX) % NX;
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const index = x + y * NX;
+        let shiftedX = Math.floor((x - shiftAmount + NX) % NX);
+        let dyn = PerlinNoise.noise(shiftedX * noiseScale, y * noiseScale, simTime * noiseChangeRate) * noiseAmplitude;
+        let t_ground = dyn + editMap[index];
+        const inc = t_inc[index];
+        const t_diff = k_const * (t_ground - inc);
+        let S_val = t_diff * dpdt;
+        S_val = Math.max(-d_max, Math.min(d_max, S_val));
+        S_array[index] = S_val;
+        t_final_array[index] = inc + t_diff;
+      }
+    }
+    lastS = S_array;
+
+    for (let y = 0; y < NY; y++) {
+      let lat = ((NY/2 - y) / (NY/2)) * (Math.PI/2);
+      let f_cor = 2 * Omega * Math.sin(lat);
+      for (let x = 0; x < NX; x++) {
+        const index = x + y * NX;
+        const baseIndex = index * 9;
+        let ux = cellVel[index].ux;
+        let uy = cellVel[index].uy;
+        let force_x = f_cor * uy;
+        let force_y = - f_cor * ux;
+        for (let i = 0; i < 9; i++) {
+          f[baseIndex + i] = f[baseIndex + i] - (f[baseIndex + i] - feqArray[baseIndex + i]) / tau + S_array[index] * weights[i]
+                              + dtStep * weights[i] * (ex[i] * force_x + ey[i] * force_y) * 3;
+        }
+      }
+    }
+
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const index = x + y * NX;
+        const baseIndex = index * 9;
+        for (let i = 0; i < 9; i++) {
+          const nx = (x + ex[i] + NX) % NX;
+          const ny = (y + ey[i] + NY) % NY;
+          const nBaseIndex = (nx + ny * NX) * 9;
+          fTemp[nBaseIndex + i] = f[baseIndex + i];
+        }
+      }
+    }
+    let temp = f;
+    f = fTemp;
+    fTemp = temp;
+
+    for (let y = 0; y < NY; y++) {
+      for (let x = 0; x < NX; x++) {
+        const index = x + y * NX;
+        const baseIndex = index * 9;
+        for (let i = 0; i < 9; i++) {
+          f[baseIndex + i] = weights[i] + (f[baseIndex + i] - weights[i]) * (1 - damping * dtStep);
+        }
+      }
+    }
+
+    for (let i = 0; i < NX * NY; i++) {
+      airTemp[i] = t_final_array[i];
+    }
+    simStepCount += stepsPerFrame;
+  }
+
+  /***** Helper: Bilinear Velocity Interpolation *****/
+  function getVelocityAt(gx, gy) {
+    let i = Math.floor(gx);
+    let j = Math.floor(gy);
+    const di = gx - i, dj = gy - j;
+    i = Math.max(0, Math.min(i, NX - 2));
+    j = Math.max(0, Math.min(j, NY - 2));
+    function cellVelocity(i, j) {
+      const baseIndex = (i + j * NX) * 9;
+      let rho = 0, ux = 0, uy = 0;
+      for (let k = 0; k < 9; k++) {
+        const f_val = f[baseIndex + k];
+        rho += f_val;
+        ux += f_val * ex[k];
+        uy += f_val * ey[k];
+      }
+      return { ux: ux / rho, uy: uy / rho };
+    }
+    const v00 = cellVelocity(i, j);
+    const v10 = cellVelocity(i + 1, j);
+    const v01 = cellVelocity(i, j + 1);
+    const v11 = cellVelocity(i + 1, j + 1);
+    const ux = (1 - di) * (1 - dj) * v00.ux +
+               di * (1 - dj) * v10.ux +
+               (1 - di) * dj * v01.ux +
+               di * dj * v11.ux;
+    const uy = (1 - di) * (1 - dj) * v00.uy +
+               di * (1 - dj) * v10.uy +
+               (1 - di) * dj * v01.uy +
+               di * dj * v11.uy;
+    return { ux, uy };
+  }
+
+  /***** Particle Update *****/
+  let simTime = 0;
+  function updateParticles(dt) {
+    simTime += dt;
+    const speedFactor = 200;
+    for (let i = particles.length - 1; i >= 0; i--) {
+      let p = particles[i];
+      p.trail.push({ x: p.x, y: p.y, t: simTime });
+      while (p.trail.length > 0 && (simTime - p.trail[0].t) > tailLength) {
+        p.trail.shift();
+      }
+      const gx = p.x / cellSize;
+      const gy = p.y / cellSize;
+      const vel = getVelocityAt(gx, gy);
+      p.x += (vel.ux + globalWind) * speedFactor * dt;
+      p.y += vel.uy * speedFactor * dt;
+      if (p.x < 0) p.x += canvas.width;
+      if (p.y < 0) p.y += canvas.height;
+      if (p.x >= canvas.width) p.x -= canvas.width;
+      if (p.y >= canvas.height) p.y -= canvas.height;
+      p.age += dt;
+      if (p.age > particleLifetime) {
+        particles.splice(i, 1);
+      }
+    }
+    particleSpawnAccumulator += spawnRate * dt;
+    while (particleSpawnAccumulator >= 1) {
+      spawnParticle();
+      particleSpawnAccumulator -= 1;
+    }
+  }
+
+  /***** Drawing *****/
+  function drawSimulation() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (showLandMap) {
+      for (let y = 0; y < NY; y++) {
+        for (let x = 0; x < NX; x++) {
+          const idx = x + y * NX;
+          ctx.fillStyle = landMap[idx] === 1 ? '#228b22' : '#1e3a8a';
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      }
+      ctx.fillStyle = '#fbbf24';
+      for (let c of cities) {
+        const cx = (c.x + 0.5) * cellSize;
+        const cy = (c.y + 0.5) * cellSize;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 4);
+        ctx.lineTo(cx - 4, cy + 4);
+        ctx.lineTo(cx + 4, cy + 4);
+        ctx.closePath();
+        ctx.fill();
+      }
+      return;
+    }
+
+    if (showTemperature) {
+      for (let y = 0; y < NY; y++) {
+        for (let x = 0; x < NX; x++) {
+          const idx = x + y * NX;
+          let T_air = airTemp[idx];
+          let col = Math.floor(((T_air + 0.02) / 0.04) * 255);
+          col = Math.max(0, Math.min(255, col));
+          ctx.fillStyle = `rgb(${col},${col},${col})`;
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      }
+    } else if (showDivergence) {
+      for (let y = 0; y < NY; y++) {
+        for (let x = 0; x < NX; x++) {
+          const idx = x + y * NX;
+          let S_val = lastS[idx];
+          let col = Math.floor(((S_val + 0.02) / 0.04) * 255);
+          col = Math.max(0, Math.min(255, col));
+          ctx.fillStyle = `rgb(${col},${col},${col})`;
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      }
+    } else {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 2;
+    for (let p of particles) {
+      if (p.trail.length > 1) {
+        for (let i = 0; i < p.trail.length - 1; i++) {
+          let p1 = p.trail[i];
+          let p2 = p.trail[i + 1];
+          if (Math.abs(p1.x - p2.x) > canvas.width / 2 || Math.abs(p1.y - p2.y) > canvas.height / 2)
+            continue;
+          let alpha1 = (p1.t - (simTime - tailLength)) / tailLength;
+          let alpha2 = (p2.t - (simTime - tailLength)) / tailLength;
+          let segAlpha = (alpha1 + alpha2) / 2;
+          ctx.strokeStyle = `rgba(0,255,255,${segAlpha.toFixed(2)})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+      }
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#00ffff';
+      ctx.fillStyle = 'rgba(0,255,255,1)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  /***** Main Animation Loop *****/
+  let simStepCount = 0;
+  let lastTime = performance.now();
+  function loop() {
+    const now = performance.now();
+    const dt = (now - lastTime) / 100;
+    lastTime = now;
+    if (!paused) {
+      const dtStep = dt / stepsPerFrame;
+      for (let i = 0; i < stepsPerFrame; i++) {
+        stepLBM(dtStep);
+      }
+      updateParticles(dt);
+    }
+    stepCounter.textContent = "Steps: " + simStepCount;
+    drawSimulation();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  /***** Step Frame Function *****/
+  function stepFrame() {
+    const dt = 1/0.6;
+    const dtStep = dt / stepsPerFrame;
+    for (let i = 0; i < stepsPerFrame; i++) {
+      stepLBM(dtStep);
+    }
+    updateParticles(dt);
+  }
+
+  /***** Save/Load System Settings *****/
+  saveSystemSettingsBtn.addEventListener('click', function() {
+    const settings = {
+      sliders: {
+        viscosity: viscosity,
+        damping: damping,
+        noiseAmplitude: noiseAmplitude,
+        noiseScale: noiseScale,
+        noiseChangeRate: noiseChangeRate,
+        tailLength: tailLength,
+        spawnRate: spawnRate,
+        D_const: D_const,
+        k_const: k_const,
+        dpdt: dpdt,
+        vc: vc,
+        d_max: d_max,
+        dayNightSpeed: dayNightSpeed,
+        pole_temperature: pole_temperature,
+        equator_temperature: equator_temperature,
+        globalWind: globalWind
+      },
+      groundMaps: {
+        editMap: Array.from(editMap)
+      },
+      landMap: Array.from(landMap),
+      cities: cities
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings));
+    const link = document.createElement("a");
+    link.setAttribute("href", dataStr);
+    link.setAttribute("download", "system_settings.json");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  });
+  loadSystemSettingsBtn.addEventListener('click', function() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = e => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const settings = JSON.parse(event.target.result);
+        viscosity = settings.sliders.viscosity;
+        damping = settings.sliders.damping;
+        noiseAmplitude = settings.sliders.noiseAmplitude;
+        noiseScale = settings.sliders.noiseScale;
+        noiseChangeRate = settings.sliders.noiseChangeRate;
+        tailLength = settings.sliders.tailLength;
+        spawnRate = settings.sliders.spawnRate;
+        D_const = settings.sliders.D_const;
+        k_const = settings.sliders.k_const;
+        dpdt = settings.sliders.dpdt;
+        vc = settings.sliders.vc;
+        d_max = settings.sliders.d_max;
+        dayNightSpeed = settings.sliders.dayNightSpeed || 0;
+        pole_temperature = settings.sliders.pole_temperature !== undefined ? settings.sliders.pole_temperature : -0.004;
+        equator_temperature = settings.sliders.equator_temperature !== undefined ? settings.sliders.equator_temperature : 0.01;
+        globalWind = settings.sliders.globalWind || 0;
+
+        visSlider.value = viscosity;
+        dampSlider.value = damping;
+        noiseAmpSlider.value = noiseAmplitude;
+        noiseScaleSlider.value = noiseScale;
+        noiseChangeRateSlider.value = noiseChangeRate;
+        tailLengthSlider.value = tailLength;
+        spawnRateSlider.value = spawnRate;
+        D_constSlider.value = D_const;
+        k_constSlider.value = k_const;
+        dpdtSlider.value = dpdt;
+        vcSlider.value = vc;
+        d_maxSlider.value = d_max;
+        dayNightSpeedSlider.value = dayNightSpeed;
+        poleTempSlider.value = pole_temperature;
+        equatorTempSlider.value = equator_temperature;
+        globalWindSlider.value = globalWind;
+
+        viscLabel.textContent = viscosity.toFixed(3);
+        dampLabel.textContent = damping.toFixed(3);
+        noiseAmpLabel.textContent = noiseAmplitude.toFixed(3);
+        noiseScaleLabel.textContent = noiseScale.toFixed(3);
+        noiseChangeRateLabel.textContent = noiseChangeRate.toFixed(3);
+        tailLengthLabel.textContent = tailLength.toFixed(1);
+        spawnRateLabel.textContent = spawnRate;
+        D_constLabel.textContent = D_const.toFixed(3);
+        k_constLabel.textContent = k_const.toFixed(3);
+        dpdtLabel.textContent = dpdt.toFixed(2);
+        vcLabel.textContent = vc.toFixed(0);
+        d_maxLabel.textContent = d_max.toFixed(3);
+        dayNightSpeedLabel.textContent = dayNightSpeed.toFixed(3);
+        poleTempLabel.textContent = pole_temperature.toFixed(3);
+        equatorTempLabel.textContent = equator_temperature.toFixed(3);
+        globalWindLabel.textContent = globalWind.toFixed(2);
+
+        editMap = new Float32Array(settings.groundMaps.editMap);
+        if (settings.landMap) {
+          landMap = new Uint8Array(settings.landMap);
+        }
+        if (settings.cities) {
+          cities = settings.cities;
+        }
+        tau = viscosity * 3 + 0.5;
+      }
+      reader.readAsText(file);
+    }
+    input.click();
+  });
+
+  /***** Save Results (Cities) *****/
+  saveResultsBtn.addEventListener('click', function() {
+    let cityCsv = "x,y\n";
+    for (let c of cities) {
+      cityCsv += c.x + "," + c.y + "\n";
+    }
+    const cityBlob = new Blob([cityCsv], {type: "text/csv"});
+    const cityUrl = URL.createObjectURL(cityBlob);
+    const cityLink = document.createElement("a");
+    cityLink.setAttribute("href", cityUrl);
+    cityLink.setAttribute("download", "cities.csv");
+    document.body.appendChild(cityLink);
+    cityLink.click();
+    cityLink.remove();
+  });
+</script>
+</body>
+</html>
